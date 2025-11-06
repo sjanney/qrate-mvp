@@ -1,0 +1,19 @@
+# Ignore local development files
+node_modules/
+certs/
+database/*.db
+database/*.db-shm
+database/*.db-wal
+server/local-server.js
+scripts/
+build/
+.env.local
+*.pem
+
+# Keep these for reference but don't deploy
+ENV_TEMPLATE.md
+FIXES_APPLIED.md
+HTTPS_MIGRATION.md
+SPOTIFY_QUICK_FIX.md
+SPOTIFY_SETUP_GUIDE.md
+
