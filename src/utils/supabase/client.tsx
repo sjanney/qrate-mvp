@@ -33,12 +33,14 @@ export async function apiCall(endpoint: string, options: RequestInit = {}) {
 
     if (!response.ok) {
       let errorText = `HTTP ${response.status}`;
+      let errorHint: string | undefined;
       try {
         // Read the response body as text first, then try to parse as JSON
         const responseText = await response.text();
         try {
           const errorData = JSON.parse(responseText);
           errorText = errorData.error || errorText;
+          errorHint = errorData.hint;
         } catch {
           // If JSON parsing fails, use the text itself
           errorText = responseText || errorText;
@@ -47,7 +49,11 @@ export async function apiCall(endpoint: string, options: RequestInit = {}) {
         // If reading fails, use status text
         errorText = response.statusText || `HTTP ${response.status}`;
       }
-      throw new Error(errorText)
+      const error = new Error(errorText) as Error & { hint?: string };
+      if (errorHint) {
+        error.hint = errorHint;
+      }
+      throw error;
     }
 
     const data = await response.json()

@@ -51,8 +51,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   const supabase = getSupabaseClient();
-  const path = (req.query.path as string[]) || [];
+  
+  // Parse path - handle both array and string cases
+  let path: string[] = [];
+  if (req.query.path) {
+    if (Array.isArray(req.query.path)) {
+      path = req.query.path as string[];
+    } else {
+      path = [req.query.path as string];
+    }
+  }
+  
+  // Also try parsing from the URL if path is empty
+  if (path.length === 0 && req.url) {
+    const urlPath = req.url.split('?')[0]; // Remove query string
+    const segments = urlPath.split('/').filter(Boolean);
+    // Remove 'api' if present
+    const apiIndex = segments.indexOf('api');
+    if (apiIndex !== -1) {
+      path = segments.slice(apiIndex + 1);
+    } else {
+      path = segments;
+    }
+  }
+  
   const route = path.join('/');
+  
+  // Debug logging (can be removed in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('API Request:', {
+      method: req.method,
+      url: req.url,
+      path: path,
+      route: route,
+      query: req.query
+    });
+  }
 
   try {
     // Health check
@@ -78,8 +112,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Events routes
-    if (route === 'events' && req.method === 'POST') {
-      const { name, theme, description, date, time, location, code } = req.body;
+    if (route === 'events') {
+      // Check method support for events route
+      if (req.method !== 'POST') {
+        return sendError(res, 405, 'Method not allowed', {
+          method: req.method,
+          allowedMethods: ['POST'],
+          hint: 'Use POST method to create an event'
+        });
+      }
+      
+      // Parse body if it's a string (Vercel sometimes passes body as string)
+      let body = req.body;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch (e) {
+          return sendError(res, 400, 'Invalid JSON in request body');
+        }
+      }
+      
+      const { name, theme, description, date, time, location, code } = body || {};
 
       if (!name || !theme) {
         return sendError(res, 400, 'Event name and theme are required');

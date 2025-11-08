@@ -99,14 +99,29 @@ export function PlaylistConnection({ event, onPlaylistSelected, onBack }: Playli
         method: 'GET',
       });
 
-      if (response.success && response.auth_url) {
-        window.location.href = response.auth_url;
+      if (response && response.success && response.auth_url) {
+        const target = String(response.auth_url);
+        window.location.href = target;
       } else {
-        throw new Error('Failed to get Spotify authorization URL');
+        // Check if response has error information
+        const errorMsg = response?.error || response?.hint || 'Failed to get Spotify authorization URL';
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
       console.error('Spotify connection error:', error);
-      setExportError(error.message || 'Failed to connect to Spotify');
+      const errorMessage = error.message || 'Failed to connect to Spotify';
+      const errorHint = error.hint || '';
+      
+      // Provide helpful error message
+      let displayError = errorMessage;
+      if (errorHint) {
+        displayError = `${errorMessage}\n\n${errorHint}`;
+      } else if (errorMessage.includes('not configured') || errorMessage.includes('YOUR_')) {
+        displayError = 'Spotify integration not configured. Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in the API configuration.';
+      } else if (errorMessage.includes('Network error') || errorMessage.includes('Failed to fetch')) {
+        displayError = 'Unable to connect to the API. Please check that the API endpoint is accessible.';
+      }
+      setExportError(displayError);
     }
   };
 

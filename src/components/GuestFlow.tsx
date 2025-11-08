@@ -269,12 +269,6 @@ export function GuestFlow({ event, onPreferencesSubmitted, onBack }: GuestFlowPr
     }
     
     try {
-      // Open a popup immediately to preserve user gesture for navigation
-      let popup: Window | null = null;
-      try {
-        popup = window.open('about:blank', '_blank');
-      } catch {}
-
       // Validate event exists before redirecting
       if (!sessionCode) {
         throw new Error('No event code found. Please join an event first.');
@@ -289,58 +283,44 @@ export function GuestFlow({ event, onPreferencesSubmitted, onBack }: GuestFlowPr
         method: 'GET',
       });
 
-      if (response.success && response.auth_url) {
+      if (response && response.success && response.auth_url) {
         const target = String(response.auth_url);
         setPendingAuthUrl(target);
-        // Multiple strategies to ensure navigation occurs
-        try {
-          if (popup && !popup.closed) {
-            popup.location.href = target;
-          } else {
-            (window.top || window).location.assign(target);
-          }
-        } catch {}
-        try {
-          const a = document.createElement('a');
-          a.href = target;
-          a.rel = 'noreferrer';
-          a.target = '_self';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        } catch {}
-        setTimeout(() => {
-          if (window.location.pathname === '/guest') {
-            if (popup && !popup.closed) {
-              popup.location.href = target;
-            } else {
-              (window.top || window).location.href = target;
-            }
-          }
-        }, 200);
+        // Direct navigation - more reliable than popup
+        window.location.href = target;
       } else {
-        throw new Error('Failed to get Spotify authorization URL');
+        // Check if response has error information
+        const errorMsg = response?.error || response?.hint || 'Failed to get Spotify authorization URL';
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
       console.error('Spotify connection error:', error);
       console.error('Full error details:', {
         message: error.message,
+        hint: error.hint,
         name: error.name,
         stack: error.stack
       });
       
       const errorMessage = error.message || 'Failed to connect to Spotify';
+      const errorHint = error.hint || '';
       
       // Provide helpful error message based on error type
       let userFriendlyError = errorMessage;
-      if (errorMessage.includes('Network error') || errorMessage.includes('Failed to fetch')) {
+      if (errorHint) {
+        userFriendlyError = `${errorMessage}\n\n${errorHint}`;
+      } else if (errorMessage.includes('Network error') || errorMessage.includes('Failed to fetch')) {
         userFriendlyError = `⚠️ Backend API not accessible\n\n` +
-          `The Supabase edge function may not be deployed or accessible.\n\n` +
+          `The API endpoint may not be deployed or accessible.\n\n` +
           `To fix this:\n` +
-          `1. Deploy the edge function: supabase functions deploy make-server-6d46752d\n` +
-          `2. Ensure Spotify credentials (SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) are set in Supabase\n` +
-          `3. Check the API endpoint: ${window.location.origin.includes('localhost') ? 'Make sure CORS is configured' : 'Verify deployment'}\n\n` +
+          `1. Check that the API is running\n` +
+          `2. Ensure Spotify credentials (SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) are configured\n` +
+          `3. Verify the API endpoint is accessible\n\n` +
           `Spotify connection is required to participate.`;
+      } else if (errorMessage.includes('not configured') || errorMessage.includes('YOUR_')) {
+        userFriendlyError = `⚠️ Spotify integration not configured\n\n` +
+          `Spotify credentials need to be set up.\n\n` +
+          `Please configure SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in the API configuration.`;
       }
       
       setOauthError(userFriendlyError);
